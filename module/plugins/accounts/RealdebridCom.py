@@ -3,6 +3,7 @@
 import xml.dom.minidom as dom
 
 from module.plugins.internal.MultiAccount import MultiAccount
+from module.plugins.internal.misc import json
 
 
 class RealdebridCom(MultiAccount):
@@ -21,20 +22,20 @@ class RealdebridCom(MultiAccount):
 
 
     def grab_hosters(self, user, password, data):
-        html = self.load("https://real-debrid.com/api/hosters.php")
-        return [x for x in map(str.strip, html.replace("\"", "").split(",")) if x]
+        data = self.load("https://api.real-debrid.com/rest/1.0/hosts/domains")
+        return json.loads(data)
 
 
     def grab_info(self, user, password, data):
         if self.pin_code:
             return
 
-        html = self.load("https://real-debrid.com/api/account.php")
-        xml  = dom.parseString(html)
+        # html = self.load("https://real-debrid.com/api/account.php")
+        # xml  = dom.parseString(html)
 
-        validuntil = float(xml.getElementsByTagName("expiration")[0].childNodes[0].nodeValue)
+        # validuntil = float(xml.getElementsByTagName("expiration")[0].childNodes[0].nodeValue)
 
-        return {'validuntil' : validuntil,
+        return {'validuntil' : -1,
                 'trafficleft': -1        ,
                 'premium'    : True      }
 
