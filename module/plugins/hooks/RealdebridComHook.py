@@ -23,6 +23,6 @@ class RealdebridComHook(MultiHook):
 
     def getHosters(self):
         https = "https" if self.getConfig('ssl') else "http"
-        data = getURL(https + "://api.real-debrid.com/rest/1.0/hosts/domains") 
+        data = self.getURL(https + "://api.real-debrid.com/rest/1.0/hosts/domains") 
 
         return json.loads(data)
