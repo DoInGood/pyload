@@ -3,17 +3,21 @@
 import re
 
 from module.plugins.captcha.ReCaptcha import ReCaptcha
-from module.plugins.internal.SimpleHoster import SimpleHoster, create_getInfo
+from module.plugins.internal.SimpleHoster import SimpleHoster
 
 
 class UploadableCh(SimpleHoster):
     __name__    = "UploadableCh"
     __type__    = "hoster"
-    __version__ = "0.12"
+    __version__ = "0.16"
     __status__  = "testing"
 
     __pattern__ = r'http://(?:www\.)?uploadable\.ch/file/(?P<ID>\w+)'
-    __config__  = [("use_premium", "bool", "Use premium account if available", True)]
+    __config__  = [("activated"   , "bool", "Activated"                                        , True),
+                   ("use_premium" , "bool", "Use premium account if available"                 , True),
+                   ("fallback"    , "bool", "Fallback to free download if premium fails"       , True),
+                   ("chk_filesize", "bool", "Check file size"                                  , True),
+                   ("max_wait"    , "int" , "Reconnect if waiting time is greater than minutes", 10  )]
 
     __description__ = """Uploadable.ch hoster plugin"""
     __license__     = "GPLv3"
@@ -28,7 +32,7 @@ class UploadableCh(SimpleHoster):
     OFFLINE_PATTERN      = r'>(File not available|This file is no longer available)'
     TEMP_OFFLINE_PATTERN = r'<div class="icon_err">'
 
-    WAIT_PATTERN = r'>Please wait.+?<'
+    WAIT_PATTERN = r'>Please wait[^<]+'
 
     RECAPTCHA_KEY = "6LdlJuwSAAAAAPJbPIoUhyqOJd7-yrah5Nhim5S3"
 
@@ -40,13 +44,13 @@ class UploadableCh(SimpleHoster):
 
         self.wait(30)
 
-        #: Make the recaptcha appear and show it the pyload interface
+        #: Make the ReCaptcha appear and show it the pyload interface
         b = self.load(pyfile.url, post={'checkDownload': "check"})
         self.log_debug(b)  #: Expected output: {'success': "showCaptcha"}
 
-        recaptcha = ReCaptcha(self)
+        self.captcha = ReCaptcha(pyfile)
 
-        response, challenge = recaptcha.challenge(self.RECAPTCHA_KEY)
+        response, challenge = self.captcha.challenge(self.RECAPTCHA_KEY)
 
         #: Submit the captcha solution
         self.load("http://www.uploadable.ch/checkReCaptcha.php",
@@ -65,13 +69,10 @@ class UploadableCh(SimpleHoster):
         self.download(pyfile.url, post={'download': "normal"}, disposition=True)
 
 
-    def check_file(self):
-        if self.check_download({'wait': re.compile("Please wait for")}):
+    def check_download(self):
+        if self.scan_download({'wait': re.compile("Please wait for")}):
             self.log_info(_("Downloadlimit reached, please wait or reconnect"))
             self.wait(60 * 60, True)
             self.retry()
 
-        return super(UploadableCh, self).check_file()
-
-
-getInfo = create_getInfo(UploadableCh)
+        return super(UploadableCh, self).check_download()

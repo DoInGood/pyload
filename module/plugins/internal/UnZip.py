@@ -2,26 +2,30 @@
 
 from __future__ import with_statement
 
-import os
 import sys
 import zipfile
 
 from module.plugins.internal.Extractor import Extractor, ArchiveError, CRCError, PasswordError
-from module.utils import fs_encode
+from module.plugins.internal.misc import encode
 
 
 class UnZip(Extractor):
     __name__    = "UnZip"
-    __version__ = "1.15"
-    __status__  = "testing"
+    __type__    = "extractor"
+    __version__ = "1.21"
+    __status__  = "stable"
 
-    __description__ = """Zip extractor plugin"""
+    __description__ = """ZIP extractor plugin"""
     __license__     = "GPLv3"
     __authors__     = [("Walter Purcaro", "vuolter@gmail.com")]
 
 
-    VERSION    = "%s.%s.%s" % (sys.version_info[0], sys.version_info[1], sys.version_info[2])
-    EXTENSIONS = [".zip", ".zip64"]
+    VERSION = "%s.%s.%s" % (sys.version_info[0], sys.version_info[1], sys.version_info[2])
+
+
+    @classmethod
+    def isarchive(cls, filename):
+        return zipfile.is_zipfile(encode(filename))
 
 
     @classmethod
@@ -30,44 +34,35 @@ class UnZip(Extractor):
 
 
     def list(self, password=None):
-        with zipfile.ZipFile(fs_encode(self.filename), 'r', allowZip64=True) as z:
+        with zipfile.ZipFile(self.target, 'r') as z:
             z.setpassword(password)
             return z.namelist()
 
 
-    def check(self, password):
-        pass
-
-
-    def verify(self):
-        with zipfile.ZipFile(fs_encode(self.filename), 'r', allowZip64=True) as z:
-            badfile = z.testzip()
-
-            if badfile:
-                raise CRCError(badfile)
-            else:
-                raise PasswordError
-
-
-    def extract(self, password=None):
+    def verify(self, password=None):
         try:
-            with zipfile.ZipFile(fs_encode(self.filename), 'r', allowZip64=True) as z:
+            with zipfile.ZipFile(self.target, 'r') as z:
                 z.setpassword(password)
-
-                badfile = z.testzip()
-
-                if badfile:
+                if z.testzip():
                     raise CRCError(badfile)
-                else:
-                    z.extractall(self.out)
 
         except (zipfile.BadZipfile, zipfile.LargeZipFile), e:
             raise ArchiveError(e)
 
         except RuntimeError, e:
-            if "encrypted" in e:
-                raise PasswordError
+            if "encrypted" in e.args[0] or "Bad password" in e.args[0]:
+                raise PasswordError(e)
             else:
-                raise ArchiveError(e)
-        else:
-            self.files = z.namelist()
+                raise CRCError(e)
+
+
+    def extract(self, password=None):
+        self.verify(password)
+
+        try:
+            with zipfile.ZipFile(self.target, 'r') as z:
+                z.setpassword(password)
+                z.extractall(self.dest)
+
+        except RuntimeError, e:
+            raise ArchiveError(e)

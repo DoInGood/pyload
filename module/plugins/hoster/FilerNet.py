@@ -4,22 +4,24 @@
 # http://filer.net/get/ivgf5ztw53et3ogd
 # http://filer.net/get/hgo14gzcng3scbvv
 
-import pycurl
 import re
-import urlparse
 
 from module.plugins.captcha.ReCaptcha import ReCaptcha
-from module.plugins.internal.SimpleHoster import SimpleHoster, create_getInfo
+from module.plugins.internal.SimpleHoster import SimpleHoster
 
 
 class FilerNet(SimpleHoster):
     __name__    = "FilerNet"
     __type__    = "hoster"
-    __version__ = "0.21"
+    __version__ = "0.24"
     __status__  = "testing"
 
     __pattern__ = r'https?://(?:www\.)?filer\.net/get/\w+'
-    __config__  = [("use_premium", "bool", "Use premium account if available", True)]
+    __config__  = [("activated"   , "bool", "Activated"                                        , True),
+                   ("use_premium" , "bool", "Use premium account if available"                 , True),
+                   ("fallback"    , "bool", "Fallback to free download if premium fails"       , True),
+                   ("chk_filesize", "bool", "Check file size"                                  , True),
+                   ("max_wait"    , "int" , "Reconnect if waiting time is greater than minutes", 10  )]
 
     __description__ = """Filer.net hoster plugin"""
     __license__     = "GPLv3"
@@ -40,28 +42,19 @@ class FilerNet(SimpleHoster):
         if 'token' not in inputs:
             self.error(_("Unable to detect token"))
 
-        self.html = self.load(pyfile.url, post={'token': inputs['token']})
+        self.data = self.load(pyfile.url, post={'token': inputs['token']})
 
         inputs = self.parse_html_form(input_names={'hash': re.compile(r'.+')})[1]
         if 'hash' not in inputs:
             self.error(_("Unable to detect hash"))
 
-        recaptcha           = ReCaptcha(self)
-        response, challenge = recaptcha.challenge()
+        self.captcha = ReCaptcha(pyfile)
+        response, challenge = self.captcha.challenge()
 
-        #@NOTE: Work-around for v0.4.9 just_header issue
-        #@TODO: Check for v0.4.10
-        self.req.http.c.setopt(pycurl.FOLLOWLOCATION, 0)
-        self.load(pyfile.url, post={'recaptcha_challenge_field': challenge,
-                                    'recaptcha_response_field' : response,
-                                    'hash'                     : inputs['hash']})
-        self.req.http.c.setopt(pycurl.FOLLOWLOCATION, 1)
+        header = self.load(pyfile.url,
+                           post={'recaptcha_challenge_field': challenge,
+                                 'recaptcha_response_field' : response,
+                                 'hash'                     : inputs['hash']},
+                           just_header=True)
 
-        if 'location' in self.req.http.header.lower():
-            self.link = re.search(r'location: (\S+)', self.req.http.header, re.I).group(1)
-            self.captcha.correct()
-        else:
-            self.captcha.invalid()
-
-
-getInfo = create_getInfo(FilerNet)
+        self.link = header.get('location')

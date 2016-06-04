@@ -4,7 +4,8 @@ import pycurl
 
 from module.network.HTTPRequest import BadHeader
 from module.network.RequestFactory import getRequest as get_request
-from module.plugins.internal.Hook import Hook, threaded
+from module.plugins.internal.Addon import Addon
+from module.plugins.internal.misc import threaded
 
 
 class BypassCaptchaException(Exception):
@@ -25,14 +26,15 @@ class BypassCaptchaException(Exception):
         return "<BypassCaptchaException %s>" % self.err
 
 
-class BypassCaptcha(Hook):
+class BypassCaptcha(Addon):
     __name__    = "BypassCaptcha"
     __type__    = "hook"
-    __version__ = "0.08"
+    __version__ = "0.12"
     __status__  = "testing"
 
-    __config__ = [("passkey"     , "password", "Access key"                      , ""  ),
-                  ("check_client", "bool"    , "Don't use if client is connected", True)]
+    __config__ = [("activated"   , "bool"    , "Activated"                       , False),
+                  ("passkey"     , "password", "Access key"                      , ""   ),
+                  ("check_client", "bool"    , "Don't use if client is connected", True )]
 
     __description__ = """Send captchas to BypassCaptcha.com"""
     __license__     = "GPLv3"
@@ -49,7 +51,7 @@ class BypassCaptcha(Hook):
 
 
     def get_credits(self):
-        res = self.load(self.GETCREDITS_URL, post={'key': self.get_config('passkey')})
+        res = self.load(self.GETCREDITS_URL, post={'key': self.config.get('passkey')})
 
         data = dict(x.split(' ', 1) for x in res.splitlines())
         return int(data['Left'])
@@ -64,7 +66,7 @@ class BypassCaptcha(Hook):
         try:
             res = self.load(self.SUBMIT_URL,
                             post={'vendor_key': self.PYLOAD_KEY,
-                                  'key': self.get_config('passkey'),
+                                  'key': self.config.get('passkey'),
                                   'gen_task_id': "1",
                                   'file': (pycurl.FORM_FILE, captcha)},
                             req=req)
@@ -84,7 +86,7 @@ class BypassCaptcha(Hook):
 
     def respond(self, ticket, success):
         try:
-            res = self.load(self.RESPOND_URL, post={'task_id': ticket, 'key': self.get_config('passkey'),
+            res = self.load(self.RESPOND_URL, post={'task_id': ticket, 'key': self.config.get('passkey'),
                                                       'cv': 1 if success else 0})
         except BadHeader, e:
             self.log_error(_("Could not send response"), e)
@@ -97,29 +99,29 @@ class BypassCaptcha(Hook):
         if not task.isTextual():
             return False
 
-        if not self.get_config('passkey'):
+        if not self.config.get('passkey'):
             return False
 
-        if self.pyload.isClientConnected() and self.get_config('check_client'):
+        if self.pyload.isClientConnected() and self.config.get('check_client'):
             return False
 
         if self.get_credits() > 0:
             task.handler.append(self)
-            task.data['service'] = self.__name__
+            task.data['service'] = self.classname
             task.setWaiting(100)
             self._process_captcha(task)
 
         else:
-            self.log_info(_("Your %s account has not enough credits") % self.__name__)
+            self.log_info(_("Your account has not enough credits"))
 
 
     def captcha_correct(self, task):
-        if task.data['service'] is self.__name__ and "ticket" in task.data:
+        if task.data['service'] == self.classname and "ticket" in task.data:
             self.respond(task.data['ticket'], True)
 
 
     def captcha_invalid(self, task):
-        if task.data['service'] is self.__name__ and "ticket" in task.data:
+        if task.data['service'] == self.classname and "ticket" in task.data:
             self.respond(task.data['ticket'], False)
 
 
@@ -129,7 +131,7 @@ class BypassCaptcha(Hook):
         try:
             ticket, result = self.submit(c)
         except BypassCaptchaException, e:
-            task.error = e.getCode()
+            task.error = e.get_code()
             return
 
         task.data['ticket'] = ticket

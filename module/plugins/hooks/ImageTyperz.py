@@ -2,13 +2,14 @@
 
 from __future__ import with_statement
 
-import pycurl
+import base64
 import re
 
-from base64 import b64encode
+import pycurl
 
 from module.network.RequestFactory import getRequest as get_request
-from module.plugins.internal.Hook import Hook, threaded
+from module.plugins.internal.Addon import Addon
+from module.plugins.internal.misc import threaded
 
 
 class ImageTyperzException(Exception):
@@ -29,15 +30,16 @@ class ImageTyperzException(Exception):
         return "<ImageTyperzException %s>" % self.err
 
 
-class ImageTyperz(Hook):
+class ImageTyperz(Addon):
     __name__    = "ImageTyperz"
     __type__    = "hook"
-    __version__ = "0.08"
+    __version__ = "0.13"
     __status__  = "testing"
 
-    __config__ = [("username"    , "str"     , "Username"                        , ""  ),
-                  ("password"    , "password", "Password"                        , ""  ),
-                  ("check_client", "bool"    , "Don't use if client is connected", True)]
+    __config__ = [("activated"   , "bool"    , "Activated"                       , False),
+                  ("username"    , "str"     , "Username"                        , ""   ),
+                  ("password"    , "password", "Password"                        , ""   ),
+                  ("check_client", "bool"    , "Don't use if client is connected", True )]
 
     __description__ = """Send captchas to ImageTyperz.com"""
     __license__     = "GPLv3"
@@ -53,14 +55,15 @@ class ImageTyperz(Hook):
     def get_credits(self):
         res = self.load(self.GETCREDITS_URL,
                      post={'action': "REQUESTBALANCE",
-                           'username': self.get_config('username'),
-                           'password': self.get_config('password')})
+                           'username': self.config.get('username'),
+                           'password': self.config.get('password')})
 
         if res.startswith('ERROR'):
             raise ImageTyperzException(res)
 
         try:
             balance = float(res)
+
         except Exception:
             raise ImageTyperzException("Invalid response")
 
@@ -75,19 +78,19 @@ class ImageTyperz(Hook):
 
         try:
             #@NOTE: Workaround multipart-post bug in HTTPRequest.py
-            if re.match("^\w*$", self.get_config('password')):
+            if re.match("^\w*$", self.config.get('password')):
                 multipart = True
                 data = (pycurl.FORM_FILE, captcha)
             else:
                 multipart = False
                 with open(captcha, 'rb') as f:
                     data = f.read()
-                data = b64encode(data)
+                data = base64.b64encode(data)
 
             res = self.load(self.SUBMIT_URL,
                             post={'action': "UPLOADCAPTCHA",
-                                  'username': self.get_config('username'),
-                                  'password': self.get_config('password'), 'file': data},
+                                  'username': self.config.get('username'),
+                                  'password': self.config.get('password'), 'file': data},
                             multipart=multipart,
                             req=req)
         finally:
@@ -112,28 +115,28 @@ class ImageTyperz(Hook):
         if not task.isTextual():
             return False
 
-        if not self.get_config('username') or not self.get_config('password'):
+        if not self.config.get('username') or not self.config.get('password'):
             return False
 
-        if self.pyload.isClientConnected() and self.get_config('check_client'):
+        if self.pyload.isClientConnected() and self.config.get('check_client'):
             return False
 
         if self.get_credits() > 0:
             task.handler.append(self)
-            task.data['service'] = self.__name__
+            task.data['service'] = self.classname
             task.setWaiting(100)
             self._process_captcha(task)
 
         else:
-            self.log_info(_("Your %s account has not enough credits") % self.__name__)
+            self.log_info(_("Your account has not enough credits"))
 
 
     def captcha_invalid(self, task):
-        if task.data['service'] is self.__name__ and "ticket" in task.data:
+        if task.data['service'] == self.classname and "ticket" in task.data:
             res = self.load(self.RESPOND_URL,
                          post={'action': "SETBADIMAGE",
-                               'username': self.get_config('username'),
-                               'password': self.get_config('password'),
+                               'username': self.config.get('username'),
+                               'password': self.config.get('password'),
                                'imageid': task.data['ticket']})
 
             if res == "SUCCESS":
@@ -148,7 +151,7 @@ class ImageTyperz(Hook):
         try:
             ticket, result = self.submit(c)
         except ImageTyperzException, e:
-            task.error = e.getCode()
+            task.error = e.get_code()
             return
 
         task.data['ticket'] = ticket

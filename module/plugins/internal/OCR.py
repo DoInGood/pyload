@@ -12,48 +12,36 @@ import logging
 import os
 import subprocess
 # import tempfile
-import traceback
 
 from module.plugins.internal.Plugin import Plugin
-from module.utils import save_join as fs_join
+from module.plugins.internal.misc import encode, fsjoin
 
 
 class OCR(Plugin):
     __name__    = "OCR"
     __type__    = "ocr"
-    __version__ = "0.16"
-    __status__  = "testing"
+    __version__ = "0.25"
+    __status__  = "stable"
 
     __description__ = """OCR base plugin"""
     __license__     = "GPLv3"
     __authors__     = [("pyLoad Team", "admin@pyload.org")]
 
 
-    def __init__(self, plugin):
-        self.pyload = plugin.pyload
-        self.plugin = plugin
-        self.info   = {}  #: Provide information in dict here
-
+    def __init__(self, pyfile):
+        self._init(pyfile.m.core)
+        self.pyfile = pyfile
         self.init()
 
 
-    def init(self):
-        """
-        Initialize additional data structures
-        """
-        pass
-
-
     def _log(self, level, plugintype, pluginname, messages):
-        return self.plugin._log(level,
-                                plugintype,
-                                "%s: %s" % (self.plugin.__name__, self.__name__),
-                                messages)
+        messages = (self.__name__,) + messages
+        return self.pyfile.plugin._log(level, plugintype, self.pyfile.plugin.__name__, messages)
 
 
     def load_image(self, image):
-        self.image = Image.open(image)
-        self.pixels = self.image.load()
+        self.img = Image.open(image)
+        self.pixels = self.img.load()
         self.result_captcha = ""
 
 
@@ -65,51 +53,58 @@ class OCR(Plugin):
 
 
     def threshold(self, value):
-        self.image = self.image.point(lambda a: a * value + 10)
+        self.img = self.img.point(lambda a: a * value + 10)
 
 
-    def run(self, command):
+    def call_cmd(self, command, *args, **kwargs):
         """
         Run a command
         """
-        popen = subprocess.Popen(command, bufsize=-1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        call = (command,) + args
+        self.log_debug("EXECUTE " + " ".join(call))
+
+        call = map(encode, call)
+        popen = subprocess.Popen(call, bufsize=-1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         popen.wait()
+
         output = popen.stdout.read() + " | " + popen.stderr.read()
+
         popen.stdout.close()
         popen.stderr.close()
-        self.pyload.log_debug("Tesseract ReturnCode " + popen.returncode, "Output: " + output)
+
+        self.log_debug("Tesseract ReturnCode %d" % popen.returncode, "Output: %s" % output)
 
 
     def run_tesser(self, subset=False, digits=True, lowercase=True, uppercase=True, pagesegmode=None):
         # tmpTif = tempfile.NamedTemporaryFile(suffix=".tif")
         try:
-            tmpTif = open(fs_join("tmp", "tmpTif_%s.tif" % self.__name__), "wb")
+            tmpTif = open(fsjoin("tmp", "tmpTif_%s.tif" % self.classname), "wb")
             tmpTif.close()
 
             # tmpTxt = tempfile.NamedTemporaryFile(suffix=".txt")
-            tmpTxt = open(fs_join("tmp", "tmpTxt_%s.txt" % self.__name__), "wb")
+            tmpTxt = open(fsjoin("tmp", "tmpTxt_%s.txt" % self.classname), "wb")
             tmpTxt.close()
 
         except IOError, e:
             self.log_error(e)
             return
 
-        self.pyload.log_debug("Saving tiff...")
-        self.image.save(tmpTif.name, 'TIFF')
+        self.log_debug("Saving tiff...")
+        self.img.save(tmpTif.name, 'TIFF')
 
         if os.name == "nt":
-            tessparams = [os.path.join(pypath, "tesseract", "tesseract.exe")]
+            command = os.path.join(pypath, "tesseract", "tesseract.exe")
         else:
-            tessparams = ["tesseract"]
+            command = "tesseract"
 
-        tessparams.extend([os.path.abspath(tmpTif.name), os.path.abspath(tmpTxt.name).replace(".txt", "")])
+        args = [os.path.abspath(tmpTif.name), os.path.abspath(tmpTxt.name).replace(".txt", "")]
 
         if pagesegmode:
-            tessparams.extend(["-psm", str(pagesegmode)])
+            args.extend(["-psm", str(pagesegmode)])
 
         if subset and (digits or lowercase or uppercase):
             # tmpSub = tempfile.NamedTemporaryFile(suffix=".subset")
-            with open(fs_join("tmp", "tmpSub_%s.subset" % self.__name__), "wb") as tmpSub:
+            with open(fsjoin("tmp", "tmpSub_%s.subset" % self.classname), "wb") as tmpSub:
                 tmpSub.write("tessedit_char_whitelist ")
 
                 if digits:
@@ -120,45 +115,43 @@ class OCR(Plugin):
                     tmpSub.write("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
                 tmpSub.write("\n")
-                tessparams.append("nobatch")
-                tessparams.append(os.path.abspath(tmpSub.name))
+                args.append("nobatch")
+                args.append(os.path.abspath(tmpSub.name))
 
-        self.pyload.log_debug("Running tesseract...")
-        self.run(tessparams)
-        self.pyload.log_debug("Reading txt...")
+        self.log_debug("Running tesseract...")
+        self.call_cmd(command, *args)
+        self.log_debug("Reading txt...")
 
         try:
             with open(tmpTxt.name, 'r') as f:
                 self.result_captcha = f.read().replace("\n", "")
+
         except Exception:
             self.result_captcha = ""
 
-        self.pyload.log_info(_("OCR result: ") + self.result_captcha)
-        try:
-            os.remove(tmpTif.name)
-            os.remove(tmpTxt.name)
-            if subset and (digits or lowercase or uppercase):
-                os.remove(tmpSub.name)
-        except OSError, e:
-            self.log_warning(e)
-            if self.pyload.debug:
-                traceback.print_exc()
+        self.log_info(_("OCR result: ") + self.result_captcha)
+
+        self.remove(tmpTif.name, trash=False)
+        self.remove(tmpTxt.name, trash=False)
+
+        if subset and (digits or lowercase or uppercase):
+            self.remove(tmpSub.name, trash=False)
 
 
-    def recognize(self, name):
+    def recognize(self, image):
         raise NotImplementedError
 
 
     def to_greyscale(self):
-        if self.image.mode != 'L':
-            self.image = self.image.convert('L')
+        if self.img.mode != 'L':
+            self.img = self.img.convert('L')
 
-        self.pixels = self.image.load()
+        self.pixels = self.img.load()
 
 
     def eval_black_white(self, limit):
-        self.pixels = self.image.load()
-        w, h = self.image.size
+        self.pixels = self.img.load()
+        w, h = self.img.size
         for x in xrange(w):
             for y in xrange(h):
                 if self.pixels[x, y] > limit:
@@ -170,7 +163,7 @@ class OCR(Plugin):
     def clean(self, allowed):
         pixels = self.pixels
 
-        w, h = self.image.size
+        w, h = self.img.size
 
         for x in xrange(w):
             for y in xrange(h):
@@ -182,20 +175,28 @@ class OCR(Plugin):
                 try:
                     if pixels[x - 1, y - 1] != 255:
                         count += 1
+
                     if pixels[x - 1, y] != 255:
                         count += 1
+
                     if pixels[x - 1, y + 1] != 255:
                         count += 1
+
                     if pixels[x, y + 1] != 255:
                         count += 1
+
                     if pixels[x + 1, y + 1] != 255:
                         count += 1
+
                     if pixels[x + 1, y] != 255:
                         count += 1
+
                     if pixels[x + 1, y - 1] != 255:
                         count += 1
+
                     if pixels[x, y - 1] != 255:
                         count += 1
+
                 except Exception:
                     pass
 
@@ -217,7 +218,7 @@ class OCR(Plugin):
         """
         Rotate by checking each angle and guess most suitable
         """
-        w, h = self.image.size
+        w, h = self.img.size
         pixels = self.pixels
 
         for x in xrange(w):
@@ -230,11 +231,11 @@ class OCR(Plugin):
 
         for angle in xrange(-45, 45):
 
-            tmpimage = self.image.rotate(angle)
+            tmpimage = self.img.rotate(angle)
 
             pixels = tmpimage.load()
 
-            w, h = self.image.size
+            w, h = self.img.size
 
             for x in xrange(w):
                 for y in xrange(h):
@@ -274,8 +275,8 @@ class OCR(Plugin):
                 hkey = key
                 hvalue = value
 
-        self.image = self.image.rotate(hkey)
-        pixels = self.image.load()
+        self.img = self.img.rotate(hkey)
+        pixels = self.img.load()
 
         for x in xrange(w):
             for y in xrange(h):
@@ -289,7 +290,7 @@ class OCR(Plugin):
 
 
     def split_captcha_letters(self):
-        captcha = self.image
+        captcha = self.img
         started = False
         letters = []
         width, height = captcha.size

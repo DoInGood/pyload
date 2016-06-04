@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from module.plugins.internal.Account import Account
+from module.plugins.internal.misc import set_cookie
 
 
 class FourSharedCom(Account):
     __name__    = "FourSharedCom"
     __type__    = "account"
-    __version__ = "0.06"
+    __version__ = "0.12"
     __status__  = "testing"
 
     __description__ = """FourShared.com account plugin"""
@@ -15,13 +16,13 @@ class FourSharedCom(Account):
                        ("stickell", "l.stickell@yahoo.it")]
 
 
-    def parse_info(self, user, password, data, req):
+    def grab_info(self, user, password, data):
         #: Free mode only for now
         return {'premium': False}
 
 
-    def login(self, user, password, data, req):
-        req.cj.setCookie("4shared.com", "4langcookie", "en")
+    def signin(self, user, password, data):
+        set_cookie(self.req.cj, "4shared.com", "4langcookie", "en")
 
         res = self.load("https://www.4shared.com/web/login",
                         post={'login'    : user,
@@ -31,4 +32,4 @@ class FourSharedCom(Account):
                               'returnTo' : "http://www.4shared.com/account/home.jsp"})
 
         if 'Please log in to access your 4shared account' in res:
-            self.login_fail()
+            self.fail_login()

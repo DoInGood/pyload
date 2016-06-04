@@ -10,10 +10,11 @@ from module.plugins.internal.Hoster import Hoster
 class ZDF(Hoster):
     __name__    = "ZDF Mediathek"
     __type__    = "hoster"
-    __version__ = "0.82"
+    __version__ = "0.88"
     __status__  = "testing"
 
     __pattern__ = r'http://(?:www\.)?zdf\.de/ZDFmediathek/\D*(\d+)\D*'
+    __config__  = [("activated", "bool", "Activated", True)]
 
     __description__ = """ZDF.de hoster plugin"""
     __license__     = "GPLv3"
@@ -38,11 +39,11 @@ class ZDF(Hoster):
 
     @staticmethod
     def get_id(url):
-        return int(re.search(r"\D*(\d{4,})\D*", url).group(1))
+        return int(re.search(r'\D*(\d{4,})\D*', url).group(1))
 
 
     def process(self, pyfile):
-        xml = etree.fromstring(self.load(self.XML_API % self.get_id(pyfile.url)))
+        xml = etree.fromstring(self.load(self.XML_API % self.get_id(pyfile.url), decode=False))
 
         status = xml.findtext("./status/statuscode")
         if status != "ok":
@@ -51,7 +52,7 @@ class ZDF(Hoster):
         video = xml.find("video")
         title = video.findtext("information/title")
 
-        pyfile.name = title
+        pyfile.name = title.encode('ascii', errors='replace')
 
         target_url = sorted((v for v in video.iter("formitaet") if self.video_valid(v)),
                             key=self.video_key)[-1].findtext("url")

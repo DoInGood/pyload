@@ -3,9 +3,10 @@
 from __future__ import with_statement
 
 import StringIO
-import pycurl
 import time
 import urllib
+
+import pycurl
 
 try:
     from PIL import Image
@@ -14,7 +15,8 @@ except ImportError:
     import Image
 
 from module.network.RequestFactory import getRequest as get_request
-from module.plugins.internal.Hook import Hook, threaded
+from module.plugins.internal.Addon import Addon
+from module.plugins.internal.misc import threaded
 
 
 class CaptchaBrotherhoodException(Exception):
@@ -35,15 +37,16 @@ class CaptchaBrotherhoodException(Exception):
         return "<CaptchaBrotherhoodException %s>" % self.err
 
 
-class CaptchaBrotherhood(Hook):
+class CaptchaBrotherhood(Addon):
     __name__    = "CaptchaBrotherhood"
     __type__    = "hook"
-    __version__ = "0.10"
+    __version__ = "0.14"
     __status__  = "testing"
 
-    __config__ = [("username"    , "str"     , "Username"                        , ""  ),
-                  ("password"    , "password", "Password"                        , ""  ),
-                  ("check_client", "bool"    , "Don't use if client is connected", True)]
+    __config__ = [("activated"   , "bool"    , "Activated"                       , False),
+                  ("username"    , "str"     , "Username"                        , ""   ),
+                  ("password"    , "password", "Password"                        , ""   ),
+                  ("check_client", "bool"    , "Don't use if client is connected", True )]
 
     __description__ = """Send captchas to CaptchaBrotherhood.com"""
     __license__     = "GPLv3"
@@ -56,7 +59,7 @@ class CaptchaBrotherhood(Hook):
 
     def get_credits(self):
         res = self.load(self.API_URL + "askCredits.aspx",
-                     get={'username': self.get_config('username'), 'password': self.get_config('password')})
+                     get={'username': self.config.get('username'), 'password': self.config.get('password')})
         if not res.startswith("OK"):
             raise CaptchaBrotherhoodException(res)
         else:
@@ -79,14 +82,15 @@ class CaptchaBrotherhood(Hook):
                 img.save(output, "JPEG")
             data = output.getvalue()
             output.close()
+
         except Exception, e:
             raise CaptchaBrotherhoodException("Reading or converting captcha image failed: %s" % e)
 
         req = get_request()
 
         url = "%ssendNewCaptcha.aspx?%s" % (self.API_URL,
-                                            urllib.urlencode({'username'     : self.get_config('username'),
-                                                              'password'     : self.get_config('password'),
+                                            urllib.urlencode({'username'     : self.config.get('username'),
+                                                              'password'     : self.config.get('password'),
                                                               'captchaSource': "pyLoad",
                                                               'timeout'      : "80"}))
 
@@ -98,6 +102,7 @@ class CaptchaBrotherhood(Hook):
         try:
             req.c.perform()
             res = req.getResponse()
+
         except Exception, e:
             raise CaptchaBrotherhoodException("Submit captcha image failed")
 
@@ -119,8 +124,8 @@ class CaptchaBrotherhood(Hook):
 
     def api_response(self, api, ticket):
         res = self.load("%s%s.aspx" % (self.API_URL, api),
-                          get={'username': self.get_config('username'),
-                               'password': self.get_config('password'),
+                          get={'username': self.config.get('username'),
+                               'password': self.config.get('password'),
                                'captchaID': ticket})
         if not res.startswith("OK"):
             raise CaptchaBrotherhoodException("Unknown response: %s" % res)
@@ -135,15 +140,15 @@ class CaptchaBrotherhood(Hook):
         if not task.isTextual():
             return False
 
-        if not self.get_config('username') or not self.get_config('password'):
+        if not self.config.get('username') or not self.config.get('password'):
             return False
 
-        if self.pyload.isClientConnected() and self.get_config('check_client'):
+        if self.pyload.isClientConnected() and self.config.get('check_client'):
             return False
 
         if self.get_credits() > 10:
             task.handler.append(self)
-            task.data['service'] = self.__name__
+            task.data['service'] = self.classname
             task.setWaiting(100)
             self._process_captcha(task)
         else:
@@ -151,8 +156,8 @@ class CaptchaBrotherhood(Hook):
 
 
     def captcha_invalid(self, task):
-        if task.data['service'] is self.__name__ and "ticket" in task.data:
-            res = self.api_response("complainCaptcha", task.data['ticket'])
+        if task.data['service'] == self.classname and "ticket" in task.data:
+            self.api_response("complainCaptcha", task.data['ticket'])
 
 
     @threaded
@@ -161,7 +166,7 @@ class CaptchaBrotherhood(Hook):
         try:
             ticket, result = self.submit(c)
         except CaptchaBrotherhoodException, e:
-            task.error = e.getCode()
+            task.error = e.get_code()
             return
 
         task.data['ticket'] = ticket

@@ -9,7 +9,7 @@ from module.plugins.internal.CaptchaService import CaptchaService
 class SolveMedia(CaptchaService):
     __name__    = "SolveMedia"
     __type__    = "captcha"
-    __version__ = "0.15"
+    __version__ = "0.19"
     __status__  = "testing"
 
     __description__ = """SolveMedia captcha service plugin"""
@@ -24,19 +24,19 @@ class SolveMedia(CaptchaService):
         html = data or self.retrieve_data()
 
         m = re.search(self.KEY_PATTERN, html)
-        if m:
+        if m is not None:
             self.key = m.group(1).strip()
             self.log_debug("Key: %s" % self.key)
             return self.key
         else:
-            self.log_warning(_("Key pattern not found"))
+            self.log_debug("Key pattern not found")
             return None
 
 
     def challenge(self, key=None, data=None):
         key = key or self.retrieve_key(data)
 
-        html = self.plugin.load("http://api.solvemedia.com/papi/challenge.noscript",
+        html = self.pyfile.plugin.load("http://api.solvemedia.com/papi/challenge.noscript",
                                     get={'k': key})
 
         for i in xrange(1, 11):
@@ -61,11 +61,11 @@ class SolveMedia(CaptchaService):
                 result = self.result("http://api.solvemedia.com/papi/media", challenge)
 
             except Fail, e:
-                self.log_warning(e)
-                self.plugin.invalidCaptcha()
+                self.log_warning(e, trace=True)
+                self.pyfile.plugin.captcha.invalid()
                 result = None
 
-            html = self.plugin.load("http://api.solvemedia.com/papi/verify.noscript",
+            html = self.pyfile.plugin.load("http://api.solvemedia.com/papi/verify.noscript",
                                         post={'adcopy_response' : result,
                                               'k'               : key,
                                               'l'               : "en",
@@ -73,7 +73,7 @@ class SolveMedia(CaptchaService):
                                               's'               : "standard",
                                               'magic'           : magic,
                                               'adcopy_challenge': challenge,
-                                              'ref'             : self.plugin.pyfile.url})
+                                              'ref'             : self.pyfile.url})
             try:
                 redirect = re.search(r'URL=(.+?)">', html).group(1)
 
@@ -84,7 +84,7 @@ class SolveMedia(CaptchaService):
                 if "error" in html:
                     self.log_warning(_("Captcha code was invalid"))
                     self.log_debug("Retry #%d" % i)
-                    html = self.plugin.load(redirect)
+                    html = self.pyfile.plugin.load(redirect)
                 else:
                     break
 
@@ -99,7 +99,4 @@ class SolveMedia(CaptchaService):
                                     get={'c': challenge},
                                     cookies=True,
                                     input_type="gif")
-
-        self.log_debug("Result: %s" % result)
-
         return result

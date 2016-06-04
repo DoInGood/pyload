@@ -31,7 +31,7 @@ class ImageSequence:
 class CircleCaptcha(OCR):
     __name__    = "CircleCaptcha"
     __type__    = "ocr"
-    __version__ = "1.04"
+    __version__ = "1.08"
     __status__  = "testing"
 
     __description__ = """Circle captcha ocr plugin"""
@@ -138,7 +138,7 @@ class CircleCaptcha(OCR):
                 jump = False
                 continue
 
-            if (curpix < self.BACKGROUND and color == -1) or (curpix is color and color > -1):
+            if (curpix < self.BACKGROUND and color == -1) or (curpix == color and color > -1):
                 if jump is False:
                     #: Found pixel
                     curcolor = curpix
@@ -168,7 +168,7 @@ class CircleCaptcha(OCR):
                     #: Found last pixel and the first white
                     break
 
-            if (curpix < self.BACKGROUND and color == -1) or (curpix is color and color > -1):
+            if (curpix < self.BACKGROUND and color == -1) or (curpix == color and color > -1):
                 #: Found pixel
                 curcolor = curpix
                 newx = x, curcolor
@@ -199,7 +199,7 @@ class CircleCaptcha(OCR):
                     #: Found last pixel and the first white
                     break
 
-            if (curpix < self.BACKGROUND and color == -1) or (curpix is color and color > -1):
+            if (curpix < self.BACKGROUND and color == -1) or (curpix == color and color > -1):
                 #: Found pixel
                 curcolor = curpix
                 newy = y, color
@@ -474,15 +474,15 @@ class CircleCaptcha(OCR):
 
         #: Assial Simmetric
         if self.pyload.debug:
-            self.log_debug("Center: " + str(c),
-                           "Missing: " + str(missing),
-                           "Howmany: " + str(howmany),
-                           "Ratio: " + str(missing / howmany),
-                           "Missing consecutives: " + str(missingconsecutive),
-                           "Missing X lenght: " + str(minX) + ":" + str(maxX),
-                           "Missing Y lenght: " + str(minY) + ":" + str(maxY),
-                           "Ratio without consecutives: " + str((missing - missingconsecutive) / howmany),
-                           "List missing: " + str(missinglist))
+            self.log_debug("Center: %s"                     % c,
+                           "Missing: %s"                    % missing,
+                           "Howmany: %s"                    % howmany,
+                           "Ratio: %s"                      % (missing / howmany),
+                           "Missing consecutives: %s"       % missingconsecutive,
+                           "Missing X lenght: %s:%s"        % (minX, maxX),
+                           "Missing Y lenght: %s:%s"        % (minY, maxY),
+                           "Ratio without consecutives: %s" % ((missing - missingconsecutive) / howmany),
+                           "List missing: %s"               % missinglist)
 
         #: Lenght of missing cannot be over 75% of diameter
 
@@ -521,7 +521,7 @@ class CircleCaptcha(OCR):
             return result
 
         curpix = pix[x, y]
-        if (curpix is color and color > -1) or (curpix < self.BACKGROUND and color == -1):
+        if (curpix == color and color > -1) or (curpix < self.BACKGROUND and color == -1):
             if curpix > self.BLACKCOLOR:
                 result = 1
             else:
@@ -531,7 +531,7 @@ class CircleCaptcha(OCR):
         if exact is False:
             if x + 1 < im.size[0]:
                 curpix = pix[x+1, y]
-                if (curpix is color and color > -1) or (curpix < self.BACKGROUND and color == -1):
+                if (curpix == color and color > -1) or (curpix < self.BACKGROUND and color == -1):
                     if curpix > self.BLACKCOLOR:
                         result = 1
                 if curpix <= self.BLACKCOLOR:
@@ -539,7 +539,7 @@ class CircleCaptcha(OCR):
 
             if x > 0:
                 curpix = pix[x-1, y]
-                if (curpix is color and color > -1) or (curpix < self.BACKGROUND and color == -1):
+                if (curpix == color and color > -1) or (curpix < self.BACKGROUND and color == -1):
                     if curpix > self.BLACKCOLOR:
                         result = 1
                 if curpix <= self.BLACKCOLOR:
@@ -711,7 +711,7 @@ class CircleCaptcha(OCR):
                             break
 
             if self.pyload.debug:
-                self.log_debug('Howmany opened circle? ' + str(len(found)) + ' ' + str(found))
+                self.log_debug("Howmany opened circle?", found)
 
             #: Clean results
             for c in found:

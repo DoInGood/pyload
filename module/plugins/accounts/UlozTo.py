@@ -9,20 +9,21 @@ from module.plugins.internal.Account import Account
 class UlozTo(Account):
     __name__    = "UlozTo"
     __type__    = "account"
-    __version__ = "0.12"
+    __version__ = "0.18"
     __status__  = "testing"
 
     __description__ = """Uloz.to account plugin"""
     __license__     = "GPLv3"
     __authors__     = [("zoidberg", "zoidberg@mujmail.cz"),
-                       ("pulpe", None)]
+                       ("pulpe", None),
+                       ("ondrej", "git@ondrej.it"),]
 
 
-    TRAFFIC_LEFT_PATTERN = r'<li class="menu-kredit"><a .*?title=".+?GB = ([\d.]+) MB"'
+    TRAFFIC_LEFT_PATTERN = r'<a class="menu-kredit" href="/kredit" title="[^"]*?[MGT]+B = ([\d.]+) MB"'
 
 
-    def parse_info(self, user, password, data, req):
-        html = self.load("http://www.ulozto.net/")
+    def grab_info(self, user, password, data):
+        html = self.load("https://www.ulozto.net/")
 
         m = re.search(self.TRAFFIC_LEFT_PATTERN, html)
 
@@ -32,8 +33,8 @@ class UlozTo(Account):
         return {'validuntil': -1, 'trafficleft': trafficleft, 'premium': premium}
 
 
-    def login(self, user, password, data, req):
-        login_page = self.load('http://www.ulozto.net/?do=web-login')
+    def signin(self, user, password, data):
+        login_page = self.load('https://www.ulozto.net/?do=web-login')
         action     = re.findall('<form action="(.+?)"', login_page)[1].replace('&amp;', '&')
         token      = re.search('_token_" value="(.+?)"', login_page).group(1)
 
@@ -46,4 +47,4 @@ class UlozTo(Account):
                                'remember': "on"})
 
         if '<div class="flash error">' in html:
-            self.login_fail()
+            self.fail_login()

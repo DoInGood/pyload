@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
 
 import re
+import urlparse
 
-from urlparse import urljoin
-
-from module.plugins.internal.SimpleHoster import SimpleHoster, create_getInfo
+from module.plugins.internal.SimpleHoster import SimpleHoster
 
 
 class FileboomMe(SimpleHoster):
     __name__    = "FileboomMe"
     __type__    = "hoster"
-    __version__ = "0.03"
+    __version__ = "0.06"
     __status__  = "testing"
 
     __pattern__ = r'https?://f(?:ile)?boom\.me/file/(?P<ID>\w+)'
+    __config__  = [("activated"   , "bool", "Activated"                                        , True),
+                   ("use_premium" , "bool", "Use premium account if available"                 , True),
+                   ("fallback"    , "bool", "Fallback to free download if premium fails"       , True),
+                   ("chk_filesize", "bool", "Check file size"                                  , True),
+                   ("max_wait"    , "int" , "Reconnect if waiting time is greater than minutes", 10  )]
 
     __description__ = """Fileboom.me hoster plugin"""
     __license__     = "GPLv3"
@@ -37,67 +41,50 @@ class FileboomMe(SimpleHoster):
 
 
     def handle_free(self, pyfile):
-        post_url = urljoin(pyfile.url, "/file/" + self.info['pattern']['ID'])
+        post_url = urlparse.urljoin(pyfile.url, "file/" + self.info['pattern']['ID'])
 
-        m = re.search(r'data-slow-id="(\w+)"', self.html)
-        if m:
-            self.html = self.load(post_url,
+        m = re.search(r'data-slow-id="(\w+)"', self.data)
+        if m is not None:
+            self.data = self.load(post_url,
                                   post={'slow_id': m.group(1)})
 
-            m = re.search(self.LINK_PATTERN, self.html)
-            if m:
-                self.link = urljoin(pyfile.url, m.group(0))
+            m = re.search(self.LINK_PATTERN, self.data)
+            if m is not None:
+                self.link = urlparse.urljoin(pyfile.url, m.group(0))
 
             else:
-                for _i in xrange(5):
-                    m = re.search(r'<input type="hidden" name="uniqueId" value="(\w+)">', self.html)
-                    if m:
-                        uniqueId = m.group(1)
-
-                        m = re.search(self.CAPTCHA_PATTERN, self.html)
-                        if m:
-                            captcha = self.captcha.decrypt(urljoin(pyfile.url, m.group(1)))
-
-                            self.html = self.load(post_url,
-                                                  post={'CaptchaForm[code]'  : captcha,
-                                                        'free'               : 1,
-                                                        'freeDownloadRequest': 1,
-                                                        'uniqueId'           : uniqueId})
-
-                            if 'The verification code is incorrect' in self.html:
-                                self.captcha.invalid()
-
-                            else:
-                                self.check_errors()
-
-                                self.html = self.load(post_url,
-                                                      post={'free'    : 1,
-                                                            'uniqueId': uniqueId})
-
-                                m = re.search(self.LINK_PATTERN, self.html)
-                                if m:
-                                    self.link = urljoin(pyfile.url, m.group(0))
-
-                                else:
-                                    self.captcha.invalid()
-
-                                break
-
-                        else:
-                            self.fail(_("Captcha not found"))
-
-                    else:
-                        m = re.search(r'>\s*Please wait ([\d:]+)', self.html)
-                        if m:
-                            wait_time = 0
-                            for v in re.findall(r'(\d+)', m.group(1), re.I):
-                                wait_time = 60 * wait_time + int(v)
-                            self.wait(wait_time)
-                            self.retry()
-                        break
+                m = re.search(r'<input type="hidden" name="uniqueId" value="(\w+)">', self.data)
+                if m is None:
+                    m = re.search(r'>\s*Please wait ([\d:]+)', self.data)
+                    if m is not None:
+                        wait_time = 0
+                        for v in re.findall(r'(\d+)', m.group(1), re.I):
+                            wait_time = 60 * wait_time + int(v)
+                        self.wait(wait_time)
+                        self.retry()
 
                 else:
-                    self.fail(_("Invalid captcha"))
+                    uniqueId = m.group(1)
 
+                    m = re.search(self.CAPTCHA_PATTERN, self.data)
+                    if m is not None:
+                        captcha = self.captcha.decrypt(urlparse.urljoin(pyfile.url, m.group(1)))
+                        self.data = self.load(post_url,
+                                              post={'CaptchaForm[code]'  : captcha,
+                                                    'free'               : 1,
+                                                    'freeDownloadRequest': 1,
+                                                    'uniqueId'           : uniqueId})
 
-getInfo = create_getInfo(FileboomMe)
+                        if 'The verification code is incorrect' in self.data:
+                            self.retry_captcha()
+
+                        else:
+                            self.check_errors()
+
+                            self.data = self.load(post_url,
+                                                  post={'free'    : 1,
+                                                        'uniqueId': uniqueId})
+
+                            m = re.search(self.LINK_PATTERN, self.data)
+                            if m is not None:
+                                self.link = urlparse.urljoin(pyfile.url, m.group(0))

@@ -1,23 +1,44 @@
 # -*- coding: utf-8 -*-
 
-from module.common.json_layer import json_loads
-from module.plugins.internal.Account import Account
+from module.plugins.internal.MultiAccount import MultiAccount
+from module.plugins.internal.misc import json
 
 
-class PremiumizeMe(Account):
+class PremiumizeMe(MultiAccount):
     __name__    = "PremiumizeMe"
     __type__    = "account"
-    __version__ = "0.19"
+    __version__ = "0.24"
     __status__  = "testing"
+
+    __config__ = [("mh_mode"    , "all;listed;unlisted", "Filter hosters to use"        , "all"),
+                  ("mh_list"    , "str"                , "Hoster list (comma separated)", ""   ),
+                  ("mh_interval", "int"                , "Reload interval in minutes"   , 60   )]
 
     __description__ = """Premiumize.me account plugin"""
     __license__     = "GPLv3"
     __authors__     = [("Florian Franzen", "FlorianFranzen@gmail.com")]
 
 
-    def parse_info(self, user, password, data, req):
+    def grab_hosters(self, user, password, data):
+        #: Get supported hosters list from premiumize.me using the
+        #: json API v1 (see https://secure.premiumize.me/?show=api)
+        answer = self.load("http://api.premiumize.me/pm-api/v1.php",  #@TODO: Revert to `https` in 0.4.10
+                           get={'method'       : "hosterlist",
+                                'params[login]': user,
+                                'params[pass]' : password})
+        data = json.loads(answer)
+
+        #: If account is not valid thera are no hosters available
+        if data['status'] != 200:
+            return []
+
+        #: Extract hosters from json file
+        return data['result']['hosterlist']
+
+
+    def grab_info(self, user, password, data):
         #: Get user data from premiumize.me
-        status = self.get_account_status(user, password, req)
+        status = self.get_account_status(user, password)
         self.log_debug(status)
 
         #: Parse account info
@@ -30,20 +51,20 @@ class PremiumizeMe(Account):
         return account_info
 
 
-    def login(self, user, password, data, req):
+    def signin(self, user, password, data):
         #: Get user data from premiumize.me
-        status = self.get_account_status(user, password, req)
+        status = self.get_account_status(user, password)
 
         #: Check if user and password are valid
         if status['status'] != 200:
-            self.login_fail()
+            self.fail_login()
 
 
-    def get_account_status(self, user, password, req):
+    def get_account_status(self, user, password):
         #: Use premiumize.me API v1 (see https://secure.premiumize.me/?show=api)
         #: To retrieve account info and return the parsed json answer
         answer = self.load("http://api.premiumize.me/pm-api/v1.php",  #@TODO: Revert to `https` in 0.4.10
                            get={'method'       : "accountstatus",
                                 'params[login]': user,
                                 'params[pass]' : password})
-        return json_loads(answer)
+        return json.loads(answer)

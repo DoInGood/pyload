@@ -8,10 +8,11 @@ import re
 class PastedCo(Crypter):
     __name__    = "PastedCo"
     __type__    = "crypter"
-    __version__ = "0.02"
+    __version__ = "0.05"
     __status__  = "testing"
 
     __pattern__ = r'http://pasted\.co/\w+'
+    __config__  = [("activated", "bool", "Activated", True)]
 
     __description__ = """Pasted.co decrypter plugin"""
     __license__     = "GPLv3"
@@ -26,8 +27,8 @@ class PastedCo(Crypter):
 
     def decrypt(self, pyfile):
         package = pyfile.package()
-        package_name = package.name
-        package_folder = package.folder
+        pack_name = package.name
+        pack_folder = package.folder
         html = self.load(pyfile.url, decode = True).splitlines()
         fs_url = None
         FS_URL_RE = re.compile('%s/fullscreen\.php\?hash=[0-9a-f]*' % pyfile.url)
@@ -41,4 +42,4 @@ class PastedCo(Crypter):
         urls = self.load(fs_url, decode = True)
         urls = urls[urls.find(PastedCo.FS_URL_PREFIX) + len(PastedCo.FS_URL_PREFIX):]
         urls = urls[:urls.find(PastedCo.FS_URL_SUFFIX)].splitlines()
-        self.packages.append((package_name, urls, package_folder))
+        self.packages.append((pack_name, urls, pack_folder))
