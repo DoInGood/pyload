@@ -19,12 +19,12 @@ class RealdebridCom(Account):
         if self.pin_code:
             return
 
-        html = req.load("https://real-debrid.com/api/account.php")
-        account  = xml.dom.minidom.parseString(html)
+        # html = req.load("https://real-debrid.com/api/account.php")
+        # account  = xml.dom.minidom.parseString(html)
 
-        validuntil = float(account.getElementsByTagName("expiration")[0].childNodes[0].nodeValue)
+        # validuntil = float(account.getElementsByTagName("expiration")[0].childNodes[0].nodeValue)
 
-        return {'validuntil' : validuntil,
+        return {'validuntil' : -1,
                 'trafficleft': -1        ,
                 'premium'    : True      }
 
