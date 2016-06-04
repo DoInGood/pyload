@@ -31,7 +31,7 @@ class UpdateManager(Hook):
     __type__    = "hook"
     __version__ = "0.53"
 
-    __config__ = [("activated"    , "bool", "Activated"                                , True ),
+    __config__ = [("activated"    , "bool", "Activated"                                , False),
                   ("checkinterval", "int" , "Check interval in hours"                  , 8    ),
                   ("autorestart"  , "bool", "Auto-restart pyLoad when required"        , True ),
                   ("checkonstart" , "bool", "Check for updates on startup"             , True ),
