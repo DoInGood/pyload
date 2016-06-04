@@ -42,7 +42,8 @@ class RealdebridCom(MultiHoster):
                 self.logWarning(data['message'])
                 self.tempOffline()
         else:
-            if pyfile.name and pyfile.name.endswith('.tmp') and data['file_name']:
+            # if pyfile.name and pyfile.name.endswith('.tmp') and data['file_name']:
+            if data['file_name']:
                 pyfile.name = data['file_name']
             pyfile.size = parseFileSize(data['file_size'])
             self.link = data['generated_links'][0][-1]
