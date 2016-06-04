@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from module.plugins.internal.MultiHook import MultiHook
-import json
+from module.common.json_layer import json_loads
 
 
 class RealdebridComHook(MultiHook):
@@ -25,4 +25,4 @@ class RealdebridComHook(MultiHook):
         https = "https" if self.getConfig('ssl') else "http"
         data = self.getURL(https + "://api.real-debrid.com/rest/1.0/hosts/domains") 
 
-        return json.loads(data)
+        return json_loads(data)
