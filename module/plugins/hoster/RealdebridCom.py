@@ -6,7 +6,6 @@ import urllib
 
 from module.common.json_layer import json_loads
 from module.plugins.internal.MultiHoster import MultiHoster, create_getInfo
-from module.utils import parseFileSize
 
 
 class RealdebridCom(MultiHoster):
@@ -27,31 +26,33 @@ class RealdebridCom(MultiHoster):
 
 
     def handlePremium(self, pyfile):
-        data = json_loads(self.load("https://real-debrid.com/ajax/unrestrict.php",
-                                    get={'lang'    : "en",
-                                         'link'    : pyfile.url,
-                                         'password': self.getPassword(),
-                                         'time'    : int(time.time() * 1000)}))
+        user = self.account.accounts.keys()[0]
+        apitoken = self.account.accounts[user]["password"]
+
+        url = "https://api.real-debrid.com/rest/1.0/unrestrict/link?auth_token={0}".format(apitoken)
+
+        payload = {
+            "link":     pyfile.url,
+            "password": self.getPassword()
+        }
+
+        json = self.load(url, post=payload)
+        data = json_loads(json)
 
         self.logDebug("Returned Data: %s" % data)
-
-        if data['error'] != 0:
-            if data['message'] == "Your file is unavailable on the hoster.":
-                self.offline()
-            else:
-                self.logWarning(data['message'])
-                self.tempOffline()
+        
+        if "error" in data:
+            self.fail("{0} (code: {1})".format(data["error"], data["error_code"]))
         else:
-            # if pyfile.name and pyfile.name.endswith('.tmp') and data['file_name']:
-            if data['file_name']:
-                pyfile.name = data['file_name']
-            pyfile.size = parseFileSize(data['file_size'])
-            self.link = data['generated_links'][0][-1]
+            if data['filename']:
+                pyfile.name = data['filename']
+            pyfile.size = data['filesize']
+            self.link = data['download']
 
-        if self.getConfig('ssl'):
-            self.link = self.link.replace("http://", "https://")
-        else:
-            self.link = self.link.replace("https://", "http://")
+        #if self.getConfig('ssl'):
+        #    self.link = self.link.replace("http://", "https://")
+        #else:
+        #    self.link = self.link.replace("https://", "http://")
 
 
 getInfo = create_getInfo(RealdebridCom)
