@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import time
 import xml.dom.minidom
 
+from module.common.json_layer import json_loads
 from module.plugins.internal.Account import Account
 
 
@@ -16,29 +18,21 @@ class RealdebridCom(Account):
 
 
     def loadAccountInfo(self, user, req):
-        if self.pin_code:
-            return
+        json = req.load("https://api.real-debrid.com/rest/1.0/user?auth_token={0}".format(self.accounts[user]["password"]))
+        account = json_loads(json)
 
-        # html = req.load("https://real-debrid.com/api/account.php")
-        # account  = xml.dom.minidom.parseString(html)
+        validuntil = time.time() + account["premium"]
 
-        # validuntil = float(account.getElementsByTagName("expiration")[0].childNodes[0].nodeValue)
-
-        return {'validuntil' : -1,
+        return {'validuntil' : validuntil,
                 'trafficleft': -1        ,
                 'premium'    : True      }
 
 
     def login(self, user, data, req):
-        self.pin_code = False
+        json = req.load("https://api.real-debrid.com/rest/1.0/user?auth_token={0}".format(data["password"]))
+        account = json_loads(json)
 
-        html = req.load("https://real-debrid.com/ajax/login.php",
-                        get={"user": user, "pass": data['password']},
-                        decode=True)
-
-        if "Your login informations are incorrect" in html:
+        if not user == account["username"]:
             self.wrongPassword()
-
-        elif "PIN Code required" in html:
-            self.logWarning(_("PIN code required. Please login to https://real-debrid.com using the PIN or disable the double authentication in your control panel on https://real-debrid.com"))
-            self.pin_code = True
+        else:
+            self.logWarning("logged in")
